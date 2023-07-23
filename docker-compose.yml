@@ -8,6 +8,8 @@ services:
     volumes:
       - ./accounts.toml:/workdir/accounts.toml
       - ./cache:/cache
+    environment:
+      - PLACENL_CHIEF_HOST=chief.visne.xyz
     command: --tokens_cache=/cache/tokens_cache.toml
   watchtower:
     image: containrrr/watchtower
