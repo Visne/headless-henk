@@ -3,20 +3,20 @@ from typing import List, Literal, Tuple
 
 from io import BytesIO
 
-import requests
+import httpx
 from PIL import Image
 
 import reddit
-from colors import GREEN, AQUA, RESET, printc, BLUE
+from colors import GREEN, AQUA, RESET, printc, BLUE, RED
 from now import now_usr
 
 
 async def get_canvas_part(canvas_id: Literal[0, 1, 2, 3, 4, 5], username: str = None):
     canvas_url = await reddit.get_canvas_url(canvas_id, username=username)
-    # async with httpx.AsyncClient() as client:
-    #     response = await client.get(canvas_url)
+    async with httpx.AsyncClient() as client:
+        response = await client.get(canvas_url)
     printc(f'{now_usr(username=username)} {GREEN}Downloading canvas from {BLUE}{canvas_url}')
-    response = requests.get(canvas_url)
+    # response = requests.get(canvas_url)
     # response.raise_for_status()
     return Image.open(BytesIO(response.content))
 
@@ -38,10 +38,35 @@ async def build_canvas_image(image_ids: List[Literal[0, 1, 2, 3, 4, 5, None]], u
 
     canvas_parts = {}
 
+    get_canvas_coroutines = []
     for i, image_id in enumerate(image_ids):
         if image_id is not None:
-            canvas_part = await get_canvas_part(image_id, username=username)
-            canvas_parts[i] = canvas_part
+            async def get_canvaspart(*, _index, _image_id):
+                canvas_part = await get_canvas_part(_image_id, username=username)
+                canvas_parts[_index] = canvas_part
+                # apparently this is good for memory
+                await asyncio.sleep(0)
+
+            get_canvas_coroutines.append(get_canvaspart(_index=i, _image_id=image_id))
+
+
+    try:
+        await asyncio.gather(*get_canvas_coroutines)
+    except RuntimeError as e:
+        print(f'{now_usr(username=username)}{RED}Something went wrong downloading the canvas trying again, the error was:{RESET}', e)
+        canvas_parts = {}
+
+        get_canvas_coroutines = []
+        for i, image_id in enumerate(image_ids):
+            if image_id is not None:
+                async def get_canvaspart(*, _index, _image_id):
+                    canvas_part = await get_canvas_part(_image_id, username=username)
+                    canvas_parts[_index] = canvas_part
+                    # apparently this is good for memory
+                    await asyncio.sleep(0)
+
+                get_canvas_coroutines.append(get_canvaspart(_index=i, _image_id=image_id))
+        await asyncio.gather(*get_canvas_coroutines)
 
     # Calculate the size of the final canvas image.
     final_canvas_width = 3000
@@ -78,7 +103,7 @@ def download_and_save_canvas():
     asyncio.get_event_loop().run_until_complete(go())
 
 
-def xy_to_canvasIndex(x: int, y: int) -> Literal[0, 1, 2, 3, 4, 5]:
+def xy_to_canvas_index(x: int, y: int) -> Literal[0, 1, 2, 3, 4, 5]:
     if x < 1000 and y < 1000:
         return 0
     elif 1000 <= x < 2000 and y < 1000:
@@ -109,17 +134,17 @@ def rgba_to_hex(rgba_tuple):
 valid_color_codes = ['#6D001A', '#BE0039', '#FF4500', '#FFA800', '#FFD635', '#FFF8B8', '#00A368', '#00CC78', '#7EED56', '#00756F', '#009EAA', '#00CCC0', '#2450A4', '#3690EA', '#51E9F4', '#493AC1', '#6A5CFF', '#94B3FF', '#811E9F', '#B44AC0',
                      '#E4ABFF', '#DE107F', '#FF3881', '#FF99AA', '#6D482F', '#9C6926', '#FFB470', '#000000', '#515252', '#898D90', '#D4D7D9', '#FFFFFF']
 
-color_names = ['N/A - #6D001A', 'N/A - #BE0039', 'Red', 'Orange', 'Yellow', 'N/A - #FFF8B8', 'Dark green', 'N/A - #00CC78', 'Light green', 'N/A - #00756F', 'N/A - #009EAA', 'N/A - #00CCC0', 'Dark blue', 'Blue', 'Light blue',
-               'N/A - #493AC1', 'N/A - #6A5CFF', 'N/A - #94B3FF', 'Dark purple', 'Light purple',
-               'N/A - #E4ABFF', 'N/A - #DE107F', 'N/A - #FF3881', 'Light pink', 'N/A - #6D482F', 'Brown', 'N/A - #FFB470', 'Black', 'N/A - #515252', 'Gray', 'Light gray', 'White']
+color_names = ['N/A - #6D001A', 'Dark red', 'Red', 'Orange', 'Yellow', 'N/A - #FFF8B8', 'Dark green', 'Green', 'Light green', 'Dark teal', 'Teal', 'N/A - #00CCC0', 'Dark blue', 'Blue', 'Light blue',
+               'Indigo', 'Periwinkle', 'N/A - #94B3FF', 'Dark purple', 'Purple',
+               'N/A - #E4ABFF', 'N/A - #DE107F', 'Pink', 'Light pink', 'Dark brown', 'Brown', 'N/A - #FFB470', 'Black', 'N/A - #515252', 'Gray', 'Light gray', 'White']
 
 
-def colorIndex_to_name(colorIndex: int) -> str:
-    return color_names[colorIndex]
+def color_index_to_name(color_index: int) -> str:
+    return color_names[color_index]
 
 
-def colorTuple_to_colorIndex(colorTuple: Tuple[int, int, int, int]) -> int:
-    hexcode = rgba_to_hex(colorTuple)
+def color_tuple_to_color_index(color_tuple: Tuple[int, int, int, int]) -> int:
+    hexcode = rgba_to_hex(color_tuple)
     return valid_color_codes.index(hexcode)
 
 

@@ -12,6 +12,7 @@ import json
 import toml
 from bs4 import BeautifulSoup
 
+
 from colors import RED, GREEN, printc, RESET, YELLOW, AQUA
 from now import now_usr
 
@@ -39,11 +40,17 @@ def get_reddit_token(username: str, password: str) -> str | None:
     s = requests.session()
     s.headers.update(INITIAL_HEADERS)
 
-    s.get(REDDIT_URL)
+    try:
+        s.get(REDDIT_URL)
+    except Exception as e:
+        printc(f"{now_usr()} {RED}Could not connect to reddit!{RESET}")
+        printc(f"{RED}This was the error:{RESET}", e)
+        return None
     time.sleep(0.5)
 
     # Get csrf token from login page
     printc(f"{now_usr(username=username)} {GREEN}Getting CSRF token...")
+
     r = s.get(LOGIN_URL)
     soup = BeautifulSoup(r.content, "html.parser")
     csrf_token = soup.find("input", {"name": "csrf_token"})["value"]
@@ -51,6 +58,7 @@ def get_reddit_token(username: str, password: str) -> str | None:
 
     # Login
     printc(f"{now_usr(username=username)} {GREEN}Logging in...")
+
     r = s.post(LOGIN_URL, data={
         "username": username,
         "password": password,
